@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5433:5432"  # solo localhost: las credenciales de desarrollo son triviales
+    volumes:
+      - ./db:/sql:ro
+      - ./db/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1: el servidor temporal del init solo escucha por socket unix; así `--wait` espera al init completo
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  app:
+    profiles: ["app"]  # `docker compose up -d --wait` sigue levantando solo la BD (README y tests lo usan así)
+    build: .
+    env_file: .env
+    environment:
+      # dentro de la red de compose la BD es `db:5432`, no localhost:5433
+      DATABASE_URL: postgresql://ventas_rw:ventas_rw@db:5432/ventas
+      DATABASE_URL_RO: postgresql://ventas_ro:ventas_ro@db:5432/ventas
+    ports:
+      - "127.0.0.1:8000:8000"  # sin autenticación: solo localhost
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  pgdata: {}

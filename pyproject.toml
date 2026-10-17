@@ -1,0 +1,37 @@
+[project]
+name = "ventas"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Leonardo Juarez Zucco", email = "leonardo.juarez.zucco@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "deepagents>=0.7.26",
+    "fastapi>=0.143.3",
+    "langchain-google-genai>=4.4.2",
+    "langchain-nvidia-ai-endpoints>=1.5.0",
+    "prompt-toolkit>=3.0.53",
+    "psycopg[binary,pool]>=3.3.6",
+    "python-dotenv>=1.2.4",
+    "rich>=15.0.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+ventas = "ventas.cli.app:main"
+ventas-web = "ventas.web.app:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
