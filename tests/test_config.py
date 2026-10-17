@@ -18,6 +18,17 @@ def test_defaults():
     assert s.nim_model == "meta/llama-3.3-70b-instruct"
 
 
+def test_sqlite_no_necesita_url_de_solo_lectura():
+    env = {k: v for k, v in BASE.items() if k != "DATABASE_URL_RO"} | {"DATABASE_URL": "sqlite:///demo.db"}
+    s = Settings.from_env(env)
+    assert s.database_url == s.database_url_ro == "sqlite:///demo.db"
+
+
+def test_postgres_sigue_exigiendo_url_de_solo_lectura():
+    with pytest.raises(ConfigError, match="DATABASE_URL_RO"):
+        Settings.from_env({k: v for k, v in BASE.items() if k != "DATABASE_URL_RO"})
+
+
 def test_faltan_variables_las_nombra_todas():
     env = {k: v for k, v in BASE.items() if k not in ("NIM_MODEL", "GOOGLE_API_KEY")}
     with pytest.raises(ConfigError) as e:

@@ -3,3 +3,7 @@
 __pycache__/
 .pytest_cache/
 .superpowers/
+*.db
+*.db-wal
+*.db-shm
+.env.example

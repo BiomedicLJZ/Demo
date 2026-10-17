@@ -26,7 +26,8 @@ class Settings:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> "Settings":
-        faltan = [k for k in REQUERIDAS if not env.get(k, "").strip()]
+        sqlite = env.get("DATABASE_URL", "").strip().startswith("sqlite:")  # un solo archivo: no hay URL de solo lectura
+        faltan = [k for k in REQUERIDAS if not env.get(k, "").strip() and not (sqlite and k == "DATABASE_URL_RO")]
         if faltan:
             raise ConfigError("Faltan variables de entorno: " + ", ".join(faltan))
         try:
@@ -45,7 +46,7 @@ class Settings:
             nim_model=env["NIM_MODEL"].strip(),
             gemini_model=env["GEMINI_MODEL"].strip(),
             database_url=env["DATABASE_URL"].strip(),
-            database_url_ro=env["DATABASE_URL_RO"].strip(),
+            database_url_ro=env.get("DATABASE_URL_RO", "").strip() or env["DATABASE_URL"].strip(),
             tasa_impuesto=tasa,
             nim_timeout=timeout,
         )

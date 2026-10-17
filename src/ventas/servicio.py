@@ -1,5 +1,7 @@
 """Reglas de negocio de ventas. Única capa que escribe en la BD; la comparten las herramientas y el CLI."""
 import re
+import sqlite3
+import time
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -42,11 +44,11 @@ def buscar_productos(db: Db, texto: str, limite: int = 10) -> list[dict]:
         raise ErrorDeNegocio("Indica qué producto quieres buscar.")
     # cada palabra debe aparecer en el nombre, en cualquier orden; si todas son vacías se busca el texto tal cual
     palabras = [_raiz(w) for w in texto.lower().split() if w not in PALABRAS_VACIAS] or [texto.lower()]
-    cond = " AND ".join(["unaccent(nombre) ILIKE unaccent(%s::text)"] * len(palabras))
+    cond = " AND ".join(["unaccent(nombre) ILIKE unaccent(%s::text) ESCAPE '\\'"] * len(palabras))  # SQLite no tiene escape por defecto
     with db.ro.connection() as c:
         return c.execute(
             f"""SELECT sku, nombre, precio, stock FROM productos
-               WHERE activo AND (({cond}) OR sku ILIKE %s)
+               WHERE activo AND (({cond}) OR sku ILIKE %s ESCAPE '\\')
                ORDER BY nombre LIMIT %s""",
             [f"%{_escapar_like(w)}%" for w in palabras] + [f"%{_escapar_like(texto)}%", limite],
         ).fetchall()
@@ -67,13 +69,17 @@ def registrar_cliente(db: Db, nombre: str, email: str, telefono: str | None = No
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         raise ErrorDeNegocio("El email no es válido.")
     with db.rw.connection() as c:
-        # DO UPDATE no-op para que RETURNING devuelva también la fila existente; xmax = 0 => fila recién insertada
-        return c.execute(
+        # DO NOTHING no devuelve fila si el email ya existía: entonces se lee la existente
+        fila = c.execute(
             """INSERT INTO clientes (nombre, email, telefono) VALUES (%s, %s, %s)
-               ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
-               RETURNING id, nombre, email, telefono, (xmax = 0) AS nuevo""",
+               ON CONFLICT (email) DO NOTHING
+               RETURNING id, nombre, email, telefono""",
             (nombre, email, (telefono or "").strip() or None),
         ).fetchone()
+        nuevo = fila is not None
+        if not nuevo:
+            fila = c.execute("SELECT id, nombre, email, telefono FROM clientes WHERE email = %s", (email,)).fetchone()
+        return {**fila, "nuevo": nuevo}
 
 
 def _normalizar_items(items: list[dict]) -> dict[str, int]:
@@ -90,6 +96,11 @@ def _normalizar_items(items: list[dict]) -> dict[str, int]:
             raise ErrorDeNegocio(f"Cantidad inválida para {sku}: debe ser un entero mayor a 0.")
         resultado[sku] = resultado.get(sku, 0) + cantidad
     return resultado
+
+
+def _marcas(pedido: dict) -> str:
+    """'%s, %s, ...' para `sku IN (...)`: portable, a diferencia de `= ANY(%s)` que es solo de Postgres."""
+    return ", ".join(["%s"] * len(pedido))
 
 
 def _armar_cotizacion(pedido: dict[str, int], filas: list[dict], tasa: Decimal) -> dict:
@@ -117,8 +128,8 @@ def cotizar(db: Db, items: list[dict], tasa: Decimal) -> dict:
     pedido = _normalizar_items(items)
     with db.ro.connection() as c:
         filas = c.execute(
-            "SELECT sku, nombre, precio, stock, impuesto FROM productos WHERE activo AND sku = ANY(%s)",
-            (list(pedido),),
+            f"SELECT sku, nombre, precio, stock, impuesto FROM productos WHERE activo AND sku IN ({_marcas(pedido)})",
+            list(pedido),
         ).fetchall()
     return _armar_cotizacion(pedido, filas, tasa)
 
@@ -130,9 +141,9 @@ def crear_pedido(db: Db, cliente_id: int, items: list[dict], tasa: Decimal) -> d
             raise ErrorDeNegocio(f"No existe el cliente {cliente_id}.")
         # ORDER BY id + FOR UPDATE: bloqueo en orden estable (sin deadlocks) y stock releído tras esperar
         filas = c.execute(
-            """SELECT id, sku, nombre, precio, stock, impuesto FROM productos
-               WHERE activo AND sku = ANY(%s) ORDER BY id FOR UPDATE""",
-            (list(pedido),),
+            f"""SELECT id, sku, nombre, precio, stock, impuesto FROM productos
+               WHERE activo AND sku IN ({_marcas(pedido)}) ORDER BY id FOR UPDATE""",
+            list(pedido),
         ).fetchall()
         cot = _armar_cotizacion(pedido, filas, tasa)
         ped = c.execute(
@@ -187,10 +198,12 @@ def emitir_comprobante(db: Db, pedido_id: int) -> dict:
             "SELECT numero, emitido_en FROM comprobantes WHERE pedido_id = %s", (pedido_id,)
         ).fetchone()
         if fila is None:
+            # SQLite no tiene secuencias; el MAX+1 es seguro porque BEGIN IMMEDIATE serializa a los escritores
+            numero = ("'COMP-' || printf('%06d', (SELECT COALESCE(MAX(id), 0) + 1 FROM comprobantes))" if db.sqlite
+                      else "'COMP-' || lpad(nextval('comprobante_seq')::text, 6, '0')")
             fila = c.execute(
-                """INSERT INTO comprobantes (pedido_id, numero)
-                   VALUES (%s, 'COMP-' || lpad(nextval('comprobante_seq')::text, 6, '0'))
-                   RETURNING numero, emitido_en""",
+                f"""INSERT INTO comprobantes (pedido_id, numero) VALUES (%s, {numero})
+                    RETURNING numero, emitido_en""",
                 (pedido_id,),
             ).fetchone()
     return {"pedido_id": pedido_id, **fila}
@@ -223,16 +236,22 @@ def obtener_pedido(db: Db, pedido_id: int) -> dict:
 
 def consultar_sql(db: Db, sql: str) -> dict:
     """SELECT libre. Defensa en capas: regex, subconsulta (rompe multi-sentencia y CTE que modifica datos),
-    rol ventas_ro de solo lectura y statement_timeout de 5 s configurado en el rol."""
+    rol ventas_ro de solo lectura y statement_timeout de 5 s configurado en el rol (en SQLite: query_only y
+    un progress handler que aborta a los 5 s)."""
     sql = (sql or "").strip().rstrip(";").strip()
     if not re.match(r"(?is)(select|with)\b", sql):
         raise ErrorDeNegocio("Solo se permiten consultas SELECT.")
     try:
         with db.ro.connection() as c:
             # SET LOCAL en cada consulta: un set_config(..., false) previo persiste en la conexión del pool
-            c.execute("SET LOCAL statement_timeout = '5s'")
+            if db.sqlite:
+                limite = time.monotonic() + 5
+                c.set_progress_handler(lambda: time.monotonic() > limite, 10_000)  # True => aborta la consulta
+            else:
+                c.execute("SET LOCAL statement_timeout = '5s'")
             # saltos de línea alrededor de `sql` para que un comentario `--` final no se coma el paréntesis
             filas = c.execute(f"SELECT * FROM (\n{sql}\n) AS q LIMIT {MAX_FILAS + 1}").fetchall()
-    except psycopg.Error as e:
-        raise ErrorDeNegocio(f"La consulta falló: {e.diag.message_primary or e}") from e
+    except (psycopg.Error, sqlite3.Error) as e:
+        detalle = e.diag.message_primary if isinstance(e, psycopg.Error) else None
+        raise ErrorDeNegocio(f"La consulta falló: {detalle or e}") from e
     return {"filas": filas[:MAX_FILAS], "truncado": len(filas) > MAX_FILAS}

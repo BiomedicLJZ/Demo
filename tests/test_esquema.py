@@ -1,15 +1,17 @@
+import sqlite3
+
 import psycopg
 import pytest
 
 
 def test_stock_no_puede_ser_negativo(db, datos):
-    with pytest.raises(psycopg.errors.CheckViolation):
+    with pytest.raises((psycopg.errors.CheckViolation, sqlite3.IntegrityError)):
         with db.rw.connection() as c:
             c.execute("UPDATE productos SET stock = -1 WHERE sku = 'TEC-001'")
 
 
 def test_rol_ro_no_puede_escribir(db, datos):
-    with pytest.raises(psycopg.Error):
+    with pytest.raises((psycopg.Error, sqlite3.Error)):
         with db.ro.connection() as c:
             c.execute("DELETE FROM productos")
 

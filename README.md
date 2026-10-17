@@ -11,6 +11,19 @@ Ciclo completo: catálogo → cliente → cotización → pedido (descuenta stoc
 
 Ejecuta `ventas` desde la raíz del proyecto: solo se lee el `.env` del directorio actual (no se heredan los de directorios padre).
 
+### Demo sin Docker ni PostgreSQL (SQLite)
+
+Para máquinas que no pueden correr Docker (p. ej. una VM sin virtualización anidada):
+
+    uv run scripts/init_sqlite.py demo.db    # esquema + catálogo de db/seed.sql; no sobrescribe si ya existe
+    # en .env: DATABASE_URL=sqlite:///demo.db   (DATABASE_URL_RO no hace falta)
+    uv run ventas
+
+Mismo agente y mismas herramientas; solo cambia la BD. Es un solo archivo para demos, no para producción:
+las escrituras se serializan (un escritor a la vez) y el solo-lectura de `consulta_sql` lo da `PRAGMA query_only`
+en vez de un rol. Para volver a Postgres basta con restaurar `DATABASE_URL`/`DATABASE_URL_RO`.
+La suite de pruebas corre sobre SQLite con `TEST_BACKEND=sqlite uv run pytest` (omite 2 pruebas propias de Postgres).
+
 ## Web UI y API REST
 
     uv run ventas-web             # http://127.0.0.1:8000 (solo loopback, sin autenticación: demo local)
