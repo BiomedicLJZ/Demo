@@ -35,7 +35,7 @@ Con Docker (app + Postgres, usa las claves de `.env`; dentro de la red de compos
 
 La app es un perfil aparte: `docker compose up -d --wait` sigue levantando solo la BD. Si ya tienes `uv run ventas-web` corriendo, libera el puerto 8000 antes. `.env` no se copia a la imagen (`.dockerignore`); las claves entran en tiempo de ejecución.
 
-Vista de cliente por defecto; `/?dev` muestra además las herramientas llamadas y qué modelo respondió. En la web Gemini responde primero y NIM es el respaldo (el CLI conserva el orden inverso).
+Vista de cliente por defecto; `/?dev` muestra además las herramientas llamadas y qué modelo respondió. En la web, igual que en el CLI, NIM responde primero y Gemini es el respaldo.
 
 `POST /api/chat` `{"mensaje", "thread_id"?}` responde por SSE (`herramienta`, `resultado`, `token`, `error`, `fin`);
 `GET /api/catalogo` · `GET /api/pedidos/{id}` · `GET /api/modelo` · docs interactivas en `/docs`.

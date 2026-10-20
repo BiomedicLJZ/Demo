@@ -108,9 +108,8 @@ def main() -> None:
         raise SystemExit("No se pudo conectar a PostgreSQL. ¿Está levantado? (docker compose up -d --wait)") from None
     herramientas = construir_herramientas(db, settings.tasa_impuesto)
     nim, gemini = construir_modelos(settings)
-    # Gemini responde primero; NIM queda de respaldo (el CLI conserva el orden inverso)
-    agente = construir_agente(gemini, nim, herramientas)
-    app = crear_app(agente, db, settings.gemini_model, settings.nim_model, [h.name for h in herramientas])
+    agente = construir_agente(nim, gemini, herramientas)
+    app = crear_app(agente, db, settings.nim_model, settings.gemini_model, [h.name for h in herramientas])
     try:
         # shortcut: sin auth; loopback por defecto. El contenedor usa 0.0.0.0 y el compose publica solo en 127.0.0.1.
         # Para exponerlo a una red hace falta autenticación.
