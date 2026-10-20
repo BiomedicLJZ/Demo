@@ -1,4 +1,4 @@
-"""Deep Agent de ventas: NIM principal, Gemini como fallback por llamada al modelo."""
+"""Deep Agent de ventas: Bedrock principal; NIM y luego Gemini como fallback por llamada al modelo."""
 from deepagents import create_deep_agent
 from langchain.agents.middleware import ModelFallbackMiddleware, TodoListMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
@@ -14,12 +14,12 @@ Reglas:
 """
 
 
-def construir_agente(principal, respaldo, herramientas):
+def construir_agente(principal, respaldos, herramientas):
     return create_deep_agent(
         model=principal,
         tools=herramientas,
         system_prompt=PROMPT,
-        middleware=[TodoListMiddleware(), ModelFallbackMiddleware(respaldo)],
+        middleware=[TodoListMiddleware(), ModelFallbackMiddleware(*respaldos)],
         checkpointer=InMemorySaver(),
     )
 

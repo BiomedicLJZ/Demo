@@ -6,6 +6,7 @@ import pytest
 from ventas.config import REQUERIDAS, ConfigError, Settings, cargar
 
 BASE = {
+    "BEDROCK_API_KEY": "bk", "BEDROCK_MODEL": "nvidia.nemotron-nano-3-30b",
     "NVIDIA_API_KEY": "nv", "GOOGLE_API_KEY": "gg", "NIM_MODEL": "meta/llama-3.3-70b-instruct",
     "GEMINI_MODEL": "gemini-x", "DATABASE_URL": "postgresql://rw", "DATABASE_URL_RO": "postgresql://ro",
 }
@@ -59,12 +60,12 @@ def test_timeout_invalido():
 
 def test_cargar_no_hereda_variables_de_env_ajenos(tmp_path, monkeypatch):
     # el proyecto vive dentro de otro directorio con su propio .env (aquí sí existe uno): solo cuenta el del cwd
-    (tmp_path / ".env").write_text("\n".join(f"{k}=v" for k in REQUERIDAS if k != "NVIDIA_API_KEY") + "\n")
+    (tmp_path / ".env").write_text("\n".join(f"{k}=v" for k in REQUERIDAS if k != "BEDROCK_API_KEY") + "\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(os, "environ", {})
     with pytest.raises(ConfigError) as e:
         cargar()
-    assert "NVIDIA_API_KEY" in str(e.value)
+    assert "BEDROCK_API_KEY" in str(e.value)
 
 
 def test_cargar_lee_el_env_del_directorio_actual(tmp_path, monkeypatch):

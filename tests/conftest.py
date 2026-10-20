@@ -79,9 +79,9 @@ def armar_sesion(db, datos, tasa):
         console = Console(record=True, width=110, force_terminal=False)
         herramientas = construir_herramientas(db, tasa)
         respaldo = guion(cls=Boom) if respaldo_falla else guion(*mensajes)
-        agente = construir_agente(guion(cls=Boom), respaldo, herramientas)
+        agente = construir_agente(guion(cls=Boom), [respaldo], herramientas)
         propias = [h.name for h in herramientas]
-        s = Sesion(agente=agente, db=db, console=console, nim_model="nim-x", gemini_model="gemini-x",
+        s = Sesion(agente=agente, db=db, console=console, bedrock_model="bedrock-x", nim_model="nim-x", gemini_model="gemini-x",
                    propias=propias, integradas=herramientas_integradas(agente, propias))
         return s, console
 

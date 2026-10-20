@@ -1,11 +1,11 @@
 # Agente de ventas
 
-Vendedor conversacional en CLI: Deep Agents (LangChain) + NVIDIA NIM (principal) con fallback a Gemini (Google AI Studio) + PostgreSQL.
+Vendedor conversacional en CLI: Deep Agents (LangChain) + AWS Bedrock (principal) con fallback a NVIDIA NIM y después Gemini (Google AI Studio) + PostgreSQL.
 Ciclo completo: catálogo → cliente → cotización → pedido (descuenta stock) → pago simulado → comprobante.
 
 ## Puesta en marcha
 
-    cp .env.example .env          # completa NVIDIA_API_KEY, GOOGLE_API_KEY, NIM_MODEL, GEMINI_MODEL
+    cp .env.example .env          # completa BEDROCK_API_KEY, BEDROCK_MODEL, NVIDIA_API_KEY, GOOGLE_API_KEY, NIM_MODEL, GEMINI_MODEL
     docker compose up -d --wait   # Postgres 17 en :5433 con esquema y datos de ejemplo
     uv run ventas
 
@@ -35,7 +35,7 @@ Con Docker (app + Postgres, usa las claves de `.env`; dentro de la red de compos
 
 La app es un perfil aparte: `docker compose up -d --wait` sigue levantando solo la BD. Si ya tienes `uv run ventas-web` corriendo, libera el puerto 8000 antes. `.env` no se copia a la imagen (`.dockerignore`); las claves entran en tiempo de ejecución.
 
-Vista de cliente por defecto; `/?dev` muestra además las herramientas llamadas y qué modelo respondió. En la web, igual que en el CLI, NIM responde primero y Gemini es el respaldo.
+Vista de cliente por defecto; `/?dev` muestra además las herramientas llamadas y qué modelo respondió. En la web, igual que en el CLI, Bedrock responde primero; NIM y luego Gemini son el respaldo.
 
 `POST /api/chat` `{"mensaje", "thread_id"?}` responde por SSE (`herramienta`, `resultado`, `token`, `error`, `fin`);
 `GET /api/catalogo` · `GET /api/pedidos/{id}` · `GET /api/modelo` · docs interactivas en `/docs`.

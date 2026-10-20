@@ -1,6 +1,6 @@
 """Prueba manual con LLMs reales (gasta tokens). Uso: uv run python scripts/humo.py
 
-1) NIM como principal.  2) NIM sabotaged (clave inválida) para forzar el fallback a Gemini.
+1) Bedrock como principal.  2) Bedrock con clave inválida para forzar el fallback a NIM.
 Imprime el `model_name` crudo de cada proveedor: verifica que etiqueta_proveedor() los distinga."""
 from dataclasses import replace
 
@@ -20,10 +20,10 @@ def correr(titulo, settings, db):
     console = Console()
     console.rule(titulo)
     herramientas = construir_herramientas(db, settings.tasa_impuesto)
-    nim, gemini = construir_modelos(settings)
-    agente = construir_agente(nim, gemini, herramientas)
+    bedrock, nim, gemini = construir_modelos(settings)
+    agente = construir_agente(bedrock, [nim, gemini], herramientas)
     propias = [h.name for h in herramientas]
-    s = Sesion(agente=agente, db=db, console=console, nim_model=settings.nim_model,
+    s = Sesion(agente=agente, db=db, console=console, bedrock_model=settings.bedrock_model, nim_model=settings.nim_model,
                gemini_model=settings.gemini_model, propias=propias,
                integradas=herramientas_integradas(agente, propias))
     ejecutar_turno(s, PREGUNTA)
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     ajustes = cargar()
     db = Db(ajustes.database_url, ajustes.database_url_ro)
     try:
-        correr("1) NIM principal", ajustes, db)
-        correr("2) NIM caído -> fallback Gemini", replace(ajustes, nvidia_api_key="invalida"), db)
+        correr("1) Bedrock principal", ajustes, db)
+        correr("2) Bedrock caído -> fallback NIM", replace(ajustes, bedrock_api_key="invalida"), db)
     finally:
         db.close()

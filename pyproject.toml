@@ -10,6 +10,7 @@ requires-python = ">=3.14"
 dependencies = [
     "deepagents>=0.7.26",
     "fastapi>=0.143.3",
+    "langchain-aws>=1.9.0",
     "langchain-google-genai>=4.4.2",
     "langchain-nvidia-ai-endpoints>=1.5.0",
     "prompt-toolkit>=3.0.53",

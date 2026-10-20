@@ -13,7 +13,7 @@ from ventas.web.app import crear_app
 def cliente(db, datos, tasa):
     def _armar(*mensajes):
         herramientas = construir_herramientas(db, tasa)
-        agente = construir_agente(guion(cls=Boom), guion(*mensajes), herramientas)
+        agente = construir_agente(guion(cls=Boom), [guion(*mensajes)], herramientas)
         app = crear_app(agente, db, "gemini-x", "nim-x", [h.name for h in herramientas])
         return TestClient(app)
     return _armar
@@ -48,7 +48,7 @@ def test_chat_mantiene_la_conversacion_por_thread_id(cliente):
 
 def test_chat_si_fallan_ambos_proveedores_emite_error(db, datos, tasa):
     herramientas = construir_herramientas(db, tasa)
-    agente = construir_agente(guion(cls=Boom), guion(cls=Boom), herramientas)
+    agente = construir_agente(guion(cls=Boom), [guion(cls=Boom)], herramientas)
     c = TestClient(crear_app(agente, db, "gemini-x", "nim-x", []))
     evs = _eventos(c.post("/api/chat", json={"mensaje": "hola"}))
     assert [e for e, _ in evs] == ["error"] and "No pude completar" in evs[0][1]["mensaje"]

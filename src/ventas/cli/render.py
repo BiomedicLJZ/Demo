@@ -19,10 +19,10 @@ def _cortar(texto: str, n: int) -> str:
     return texto if len(texto) <= n else texto[: n - 1] + "…"
 
 
-def banner(nim_model: str, gemini_model: str) -> Panel:
+def banner(bedrock_model: str, nim_model: str, gemini_model: str) -> Panel:
     cuerpo = Text.assemble(
         ("Vendedor conversacional\n", "bold"),
-        (f"NIM: {nim_model}  ·  Respaldo: {gemini_model}\n", "dim"),
+        (f"Bedrock: {bedrock_model}  ·  Respaldo: {nim_model}, {gemini_model}\n", "dim"),
         ("Escribe tu mensaje, o / para ver los comandos.", "cyan"),
     )
     return Panel(cuerpo, title="[bold green]🛒 Agente de ventas[/]", border_style="green")

@@ -6,7 +6,8 @@ from decimal import Decimal, InvalidOperation
 
 from dotenv import load_dotenv
 
-REQUERIDAS = ("NVIDIA_API_KEY", "GOOGLE_API_KEY", "NIM_MODEL", "GEMINI_MODEL", "DATABASE_URL", "DATABASE_URL_RO")
+REQUERIDAS = ("BEDROCK_API_KEY", "BEDROCK_MODEL", "NVIDIA_API_KEY", "GOOGLE_API_KEY", "NIM_MODEL", "GEMINI_MODEL",
+              "DATABASE_URL", "DATABASE_URL_RO")
 
 
 class ConfigError(Exception):
@@ -15,6 +16,8 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class Settings:
+    bedrock_api_key: str
+    bedrock_model: str
     nvidia_api_key: str
     google_api_key: str
     nim_model: str
@@ -41,6 +44,8 @@ class Settings:
         except ValueError:
             raise ConfigError("NIM_TIMEOUT no es un número válido") from None
         return cls(
+            bedrock_api_key=env["BEDROCK_API_KEY"].strip(),
+            bedrock_model=env["BEDROCK_MODEL"].strip(),
             nvidia_api_key=env["NVIDIA_API_KEY"].strip(),
             google_api_key=env["GOOGLE_API_KEY"].strip(),
             nim_model=env["NIM_MODEL"].strip(),

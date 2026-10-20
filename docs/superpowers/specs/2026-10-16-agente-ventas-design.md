@@ -8,7 +8,7 @@ Un **vendedor conversacional** en CLI que atiende al cliente de punta a punta y 
 
 catálogo/stock → registrar cliente → cotización → pedido (descuenta inventario) → pago **simulado** → comprobante (registro en BD).
 
-- LLM principal: **NVIDIA NIM**. Fallback: **Google AI Studio (Gemini)**.
+- LLM principal: **AWS Bedrock**. Fallback: **NVIDIA NIM** y después **Google AI Studio (Gemini)**.
 - Framework: **LangChain Deep Agents** (`deepagents`).
 - Entrada: CLI con Rich, comandos slash y autocompletado.
 - Idioma: español.
@@ -20,7 +20,7 @@ catálogo/stock → registrar cliente → cotización → pedido (descuenta inve
 |---|---|
 | Acceso a BD | **Híbrido**: escrituras solo por herramientas tipadas (transacción en Python); lecturas libres por `consulta_sql` con rol de solo lectura |
 | Agente | Un solo Deep Agent, sin subagentes propios. `write_todos` viene de `TodoListMiddleware` (Deep Agents 0.7.26 no lo trae) |
-| Fallback | `ModelFallbackMiddleware` (langchain): NIM → Gemini, por llamada al modelo |
+| Fallback | `ModelFallbackMiddleware` (langchain): Bedrock → NIM → Gemini, por llamada al modelo |
 | Memoria | `InMemorySaver`, historial por `thread_id` |
 | Dinero | `NUMERIC(12,2)`; precios y totales calculados en código desde la BD, nunca por el LLM |
 | Impuesto | Tasa única `TASA_IMPUESTO` (default 0.16) |
@@ -71,20 +71,20 @@ Lectura: `consulta_sql(sql)` — una sola sentencia `SELECT`, rol `ventas_ro`, `
 
 ## 6. Modelos, fallback y configuración
 
-Variables (`.env`, con `.env.example`): `NVIDIA_API_KEY`, `GOOGLE_API_KEY`, `NIM_MODEL`, `GEMINI_MODEL`, `DATABASE_URL`, `DATABASE_URL_RO`, `TASA_IMPUESTO`.
+Variables (`.env`, con `.env.example`): `BEDROCK_API_KEY`, `BEDROCK_MODEL`, `NVIDIA_API_KEY`, `GOOGLE_API_KEY`, `NIM_MODEL`, `GEMINI_MODEL`, `DATABASE_URL`, `DATABASE_URL_RO`, `TASA_IMPUESTO`.
 Los nombres de modelo **no tienen default en código**; el arranque falla con mensaje claro si faltan.
 
 ```python
 create_deep_agent(
-    model=ChatNVIDIA(model=NIM_MODEL),  # timeout vía llm._client.timeout (sin max_retries)
+    model=ChatBedrockConverse(model=BEDROCK_MODEL, api_key=BEDROCK_API_KEY, region_name="us-east-1"),
     tools=[...6 tipadas, consulta_sql],
-    middleware=[TodoListMiddleware(), ModelFallbackMiddleware(ChatGoogleGenerativeAI(model=GEMINI_MODEL))],
+    middleware=[TodoListMiddleware(), ModelFallbackMiddleware(ChatNVIDIA(model=NIM_MODEL), ChatGoogleGenerativeAI(model=GEMINI_MODEL))],
     system_prompt=<vendedor en español + reglas de negocio>,
     checkpointer=InMemorySaver(),
 )
 ```
 
-- El fallback se decide **por llamada**: con NIM caído, cada turno paga el timeout de NIM antes de pasar a Gemini.
+- El fallback se decide **por llamada**: con Bedrock caído, cada turno paga su timeout antes de pasar a NIM (y luego a Gemini).
 - El proveedor que respondió se lee de `response_metadata["model_name"]` del último `AIMessage`.
 - Si fallan ambos: error legible en el CLI, la sesión sigue viva.
 
@@ -93,7 +93,7 @@ APIs verificadas en entorno desechable: `deepagents` 0.7.26, `langchain` 1.4.6, 
 ## 7. CLI
 
 - **Entrada:** `prompt_toolkit`, autocompletado al escribir `/` (comando + descripción), historial.
-- **Salida:** `rich` — banner, spinner, líneas tenues por herramienta (`⚙ cotizar(...)`), respuesta final en `Panel` con Markdown, `Table` para catálogo/pedidos, pie con proveedor (`NIM` o `Gemini ↩ fallback`).
+- **Salida:** `rich` — banner, spinner, líneas tenues por herramienta (`⚙ cotizar(...)`), respuesta final en `Panel` con Markdown, `Table` para catálogo/pedidos, pie con proveedor (`Bedrock`, `NIM ↩ fallback` o `Gemini ↩ fallback`).
 - **Comandos:** `/ayuda`, `/nuevo`, `/modelo`, `/herramientas`, `/todos`, `/limpiar`, `/salir`, `/catalogo`, `/pedido <id>`.
 - `/catalogo` y `/pedido <id>` consultan la BD con el pool `ro`, sin pasar por el LLM.
 - `/herramientas` muestra las de negocio y marca las integradas de Deep Agents.

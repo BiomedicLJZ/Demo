@@ -13,8 +13,8 @@ def _txt(obj) -> str:
 
 
 def test_banner_menciona_modelos():
-    t = _txt(render.banner("nim-x", "gemini-y"))
-    assert "nim-x" in t and "gemini-y" in t and "/" in t
+    t = _txt(render.banner("bedrock-z", "nim-x", "gemini-y"))
+    assert "bedrock-z" in t and "nim-x" in t and "gemini-y" in t and "/" in t
 
 
 def test_tabla_catalogo():

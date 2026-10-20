@@ -24,6 +24,7 @@ class Sesion:
     agente: object
     db: Db
     console: Console
+    bedrock_model: str
     nim_model: str
     gemini_model: str
     propias: list[str]
@@ -36,10 +37,12 @@ class Sesion:
         return {"configurable": {"thread_id": self.thread_id}}
 
 
-def etiqueta_proveedor(nombre_modelo: str | None, nim_model: str) -> str:
+def etiqueta_proveedor(nombre_modelo: str | None, bedrock_model: str, nim_model: str) -> str:
     if not nombre_modelo:
         return "—"
-    return "NIM" if nombre_modelo == nim_model else "Gemini ↩ fallback"
+    if nombre_modelo == bedrock_model:
+        return "Bedrock"
+    return "NIM ↩ fallback" if nombre_modelo == nim_model else "Gemini ↩ fallback"
 
 
 def _texto(contenido) -> str:
@@ -65,7 +68,7 @@ def ejecutar_turno(s: Sesion, texto: str) -> None:
                             final = _texto(m.content)
                     elif isinstance(m, ToolMessage):
                         s.console.print(render.resultado_herramienta(_texto(m.content)))
-    s.proveedor = etiqueta_proveedor(modelo, s.nim_model)
+    s.proveedor = etiqueta_proveedor(modelo, s.bedrock_model, s.nim_model)
     if final:
         s.console.print(render.respuesta(final, s.proveedor))
 
@@ -80,7 +83,8 @@ def _nuevo(s, args):
 
 
 def _modelo(s, args):
-    s.console.print(f"Principal: [bold]{s.nim_model}[/] (NIM)  ·  Respaldo: [bold]{s.gemini_model}[/] (Gemini)  ·  "
+    s.console.print(f"Principal: [bold]{s.bedrock_model}[/] (Bedrock)  ·  Respaldo: [bold]{s.nim_model}[/] (NIM), "
+                    f"[bold]{s.gemini_model}[/] (Gemini)  ·  "
                     f"Último en responder: [bold]{s.proveedor}[/]")
 
 
@@ -149,14 +153,14 @@ def main() -> None:
         raise SystemExit(2) from None
 
     herramientas = construir_herramientas(db, settings.tasa_impuesto)
-    nim, gemini = construir_modelos(settings)
-    agente = construir_agente(nim, gemini, herramientas)
+    bedrock, nim, gemini = construir_modelos(settings)
+    agente = construir_agente(bedrock, [nim, gemini], herramientas)
     propias = [h.name for h in herramientas]
-    sesion = Sesion(agente=agente, db=db, console=console, nim_model=settings.nim_model,
+    sesion = Sesion(agente=agente, db=db, console=console, bedrock_model=settings.bedrock_model, nim_model=settings.nim_model,
                     gemini_model=settings.gemini_model, propias=propias,
                     integradas=herramientas_integradas(agente, propias))
 
-    console.print(render.banner(settings.nim_model, settings.gemini_model))
+    console.print(render.banner(settings.bedrock_model, settings.nim_model, settings.gemini_model))
     prompt = PromptSession(completer=CompletadorSlash(), complete_while_typing=True)
     try:
         while True:

@@ -6,10 +6,10 @@ from ventas.cli.app import etiqueta_proveedor, procesar_linea
 
 
 @pytest.mark.parametrize("nombre,esperado", [
-    (None, "—"), ("nim-x", "NIM"), ("gemini-x", "Gemini ↩ fallback"),
+    (None, "—"), ("bedrock-x", "Bedrock"), ("nim-x", "NIM ↩ fallback"), ("gemini-x", "Gemini ↩ fallback"),
 ])
 def test_etiqueta_proveedor(nombre, esperado):
-    assert etiqueta_proveedor(nombre, "nim-x") == esperado
+    assert etiqueta_proveedor(nombre, "bedrock-x", "nim-x") == esperado
 
 
 def test_turno_con_fallback_muestra_herramienta_respuesta_y_proveedor(armar_sesion):
@@ -67,7 +67,7 @@ def test_comandos_basicos(armar_sesion):
     assert procesar_linea(s, "/herramientas") is True
     assert procesar_linea(s, "/limpiar") is True
     out = console.export_text()
-    assert "/catalogo" in out and "nim-x" in out and "gemini-x" in out
+    assert "/catalogo" in out and "bedrock-x" in out and "nim-x" in out and "gemini-x" in out
     assert "buscar_productos" in out and "write_todos" in out
 
 
