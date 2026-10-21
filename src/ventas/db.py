@@ -24,8 +24,14 @@ def _decimal(b: bytes) -> Decimal:
     return d.quantize(CENT) if d.as_tuple().exponent > -2 else d
 
 
+def _cantidad(b: bytes) -> int | Decimal:
+    d = Decimal(b.decode())
+    return int(d) if d == d.to_integral_value() else d
+
+
 sqlite3.register_adapter(Decimal, str)
 sqlite3.register_converter("NUMERIC", _decimal)
+sqlite3.register_converter("CANTIDAD", _cantidad)  # stock y cantidad: 5 sigue siendo 5, 6.975 es Decimal
 
 
 def _sin_acentos(s: str | None) -> str | None:

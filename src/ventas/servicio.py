@@ -82,19 +82,27 @@ def registrar_cliente(db: Db, nombre: str, email: str, telefono: str | None = No
         return {**fila, "nuevo": nuevo}
 
 
-def _normalizar_items(items: list[dict]) -> dict[str, int]:
+def _cantidad(sku: str, valor) -> int | Decimal:
+    """Número > 0 con hasta 3 decimales (productos por kg); entero si lo es, para no mostrar «2.0»."""
+    if isinstance(valor, bool) or not isinstance(valor, (int, float, Decimal)):
+        raise ErrorDeNegocio(f"Cantidad inválida para {sku}: debe ser un número mayor a 0.")
+    d = Decimal(str(valor))
+    if not d.is_finite() or d <= 0 or d * 1000 != (d * 1000).to_integral_value():
+        raise ErrorDeNegocio(f"Cantidad inválida para {sku}: debe ser mayor a 0 y tener hasta 3 decimales.")
+    return int(d) if d == d.to_integral_value() else d
+
+
+def _normalizar_items(items: list[dict]) -> dict[str, int | Decimal]:
     """[{'sku','cantidad'}] -> {SKU: cantidad}: sku en mayúsculas, duplicados sumados, cantidades validadas."""
     if not items:
         raise ErrorDeNegocio("El pedido no tiene productos.")
-    resultado: dict[str, int] = {}
+    resultado: dict[str, int | Decimal] = {}
     for it in items:
         sku = str(it.get("sku") or "").strip().upper()
-        cantidad = it.get("cantidad")
         if not sku:
             raise ErrorDeNegocio("Falta el SKU de un producto.")
-        if isinstance(cantidad, bool) or not isinstance(cantidad, int) or cantidad <= 0:
-            raise ErrorDeNegocio(f"Cantidad inválida para {sku}: debe ser un entero mayor a 0.")
-        resultado[sku] = resultado.get(sku, 0) + cantidad
+        suma = resultado.get(sku, 0) + _cantidad(sku, it.get("cantidad"))
+        resultado[sku] = int(suma) if suma == int(suma) else suma
     return resultado
 
 
@@ -103,7 +111,7 @@ def _marcas(pedido: dict) -> str:
     return ", ".join(["%s"] * len(pedido))
 
 
-def _armar_cotizacion(pedido: dict[str, int], filas: list[dict], tasa: Decimal) -> dict:
+def _armar_cotizacion(pedido: dict[str, int | Decimal], filas: list[dict], tasa: Decimal) -> dict:
     por_sku = {f["sku"]: f for f in filas}
     faltan = [s for s in pedido if s not in por_sku]
     if faltan:
@@ -157,7 +165,7 @@ def crear_pedido(db: Db, cliente_id: int, items: list[dict], tasa: Decimal) -> d
                 "INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario) VALUES (%s, %s, %s, %s)",
                 (ped["id"], ids[l["sku"]], l["cantidad"], l["precio_unitario"]),
             )
-            c.execute("UPDATE productos SET stock = stock - %s WHERE id = %s", (l["cantidad"], ids[l["sku"]]))
+            c.execute("UPDATE productos SET stock = ROUND(stock - %s, 3) WHERE id = %s", (l["cantidad"], ids[l["sku"]]))
     return {"pedido_id": ped["id"], "estado": ped["estado"], **cot}
 
 

@@ -5,17 +5,35 @@ from fastapi.testclient import TestClient
 
 from tests.fakes import Boom, guion, ia, llamada
 from ventas.agent import construir_agente
+from ventas.empresas import EMPRESAS
 from ventas.tools import construir_herramientas
-from ventas.web.app import crear_app
+from ventas.usuarios import Usuarios
+from ventas.web.app import Contexto, crear_app
+
+CLAVE = "clave-de-prueba"
+
+
+def contexto(db, tasa, *mensajes, empresa="agro", respaldo_falla=False) -> Contexto:
+    herramientas = construir_herramientas(db, tasa)
+    respaldo = guion(cls=Boom) if respaldo_falla else guion(*mensajes)
+    agente = construir_agente(guion(cls=Boom), [respaldo], herramientas)
+    return Contexto(EMPRESAS[empresa], db, agente, [h.name for h in herramientas])
 
 
 @pytest.fixture
-def cliente(db, datos, tasa):
-    def _armar(*mensajes):
-        herramientas = construir_herramientas(db, tasa)
-        agente = construir_agente(guion(cls=Boom), [guion(*mensajes)], herramientas)
-        app = crear_app(agente, db, "gemini-x", "nim-x", [h.name for h in herramientas])
-        return TestClient(app)
+def usuarios(tmp_path):
+    u = Usuarios(tmp_path / "auth.db")
+    u.guardar("ana", CLAVE, "agro")
+    return u
+
+
+@pytest.fixture
+def cliente(db, datos, tasa, usuarios):
+    def _armar(*mensajes, respaldo_falla=False):
+        ctx = contexto(db, tasa, *mensajes, respaldo_falla=respaldo_falla)
+        c = TestClient(crear_app(lambda id: ctx, usuarios, "gemini-x", "nim-x"))
+        assert c.post("/api/login", json={"usuario": "ana", "clave": CLAVE}).status_code == 200
+        return c
     return _armar
 
 
@@ -46,10 +64,8 @@ def test_chat_mantiene_la_conversacion_por_thread_id(cliente):
     assert fin[1]["thread_id"] == tid
 
 
-def test_chat_si_fallan_ambos_proveedores_emite_error(db, datos, tasa):
-    herramientas = construir_herramientas(db, tasa)
-    agente = construir_agente(guion(cls=Boom), [guion(cls=Boom)], herramientas)
-    c = TestClient(crear_app(agente, db, "gemini-x", "nim-x", []))
+def test_chat_si_fallan_ambos_proveedores_emite_error(cliente):
+    c = cliente(respaldo_falla=True)
     evs = _eventos(c.post("/api/chat", json={"mensaje": "hola"}))
     assert [e for e, _ in evs] == ["error"] and "No pude completar" in evs[0][1]["mensaje"]
 

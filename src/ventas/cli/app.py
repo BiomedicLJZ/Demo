@@ -1,4 +1,5 @@
 """Loop del CLI: lee una línea, la despacha a un comando slash o al agente."""
+import argparse
 import uuid
 from dataclasses import dataclass, field
 
@@ -14,6 +15,7 @@ from ventas.cli import render
 from ventas.cli.comandos import CompletadorSlash, parsear
 from ventas.config import ConfigError, cargar
 from ventas.db import Db
+from ventas.empresas import EMPRESAS, abrir_db
 from ventas.models import construir_modelos
 from ventas.servicio import ErrorDeNegocio
 from ventas.tools import construir_herramientas
@@ -141,10 +143,13 @@ def procesar_linea(s: Sesion, linea: str) -> bool:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(prog="ventas", description="Vendedor conversacional en la terminal.")
+    ap.add_argument("--empresa", choices=list(EMPRESAS), default="agro", help="empresa a atender (por defecto agro)")
+    empresa = EMPRESAS[ap.parse_args().empresa]  # shortcut: el CLI es local y no pide login; el aislamiento lo da la BD de la empresa
     console = Console()
     try:
         settings = cargar()
-        db = Db(settings.database_url, settings.database_url_ro)
+        db = abrir_db(empresa, settings)
     except ConfigError as e:
         console.print(render.error(str(e)))
         raise SystemExit(2) from None
@@ -154,12 +159,13 @@ def main() -> None:
 
     herramientas = construir_herramientas(db, settings.tasa_impuesto)
     bedrock, nim, gemini = construir_modelos(settings)
-    agente = construir_agente(bedrock, [nim, gemini], herramientas)
+    agente = construir_agente(bedrock, [nim, gemini], herramientas, empresa.negocio)
     propias = [h.name for h in herramientas]
     sesion = Sesion(agente=agente, db=db, console=console, bedrock_model=settings.bedrock_model, nim_model=settings.nim_model,
                     gemini_model=settings.gemini_model, propias=propias,
                     integradas=herramientas_integradas(agente, propias))
 
+    console.print(f"Empresa: [bold]{empresa.nombre}[/]")
     console.print(render.banner(settings.bedrock_model, settings.nim_model, settings.gemini_model))
     prompt = PromptSession(completer=CompletadorSlash(), complete_while_typing=True)
     try:

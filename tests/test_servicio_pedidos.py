@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from tests.conftest import solo_sqlite
 from ventas import servicio
 from ventas.servicio import ErrorDeNegocio
 
@@ -44,7 +45,7 @@ def test_items_repetidos_se_suman_y_validan_stock(db, datos, tasa):
         servicio.cotizar(db, [{"sku": "RAR-001", "cantidad": 1}, {"sku": "RAR-001", "cantidad": 1}], tasa)
 
 
-@pytest.mark.parametrize("cantidad", [0, -1, 1.5, True, "2", None])
+@pytest.mark.parametrize("cantidad", [0, -1, 1.2345, float("nan"), float("inf"), True, "2", None])
 def test_cantidad_invalida_se_rechaza(db, datos, tasa, cantidad):
     with pytest.raises(ErrorDeNegocio, match="Cantidad inválida"):
         servicio.cotizar(db, [{"sku": "TEC-001", "cantidad": cantidad}], tasa)
@@ -104,3 +105,17 @@ def test_sin_sobreventa_con_compras_simultaneas(db, datos, tasa):
         resultados = list(ex.map(comprar, range(4)))
     assert resultados.count("ok") == 1 and resultados.count("sin_stock") == 3
     assert _stock(db, "RAR-001") == 0 and _n(db, "pedidos") == 1
+
+
+@solo_sqlite  # el esquema de Postgres de prueba puede ser anterior a NUMERIC(12,3): recrear con `docker compose down -v`
+def test_cantidad_fraccionaria_descuenta_stock_fraccionario(db, datos, tasa):
+    with db.rw.connection() as c:
+        c.execute("INSERT INTO productos (sku, nombre, precio, stock) VALUES ('AVE-001', 'Avena a granel (KG)', 18.00, 6.975)")
+    assert _stock(db, "AVE-001") == Decimal("6.975")
+    c = servicio.crear_pedido(db, ANA, [{"sku": "AVE-001", "cantidad": 2.5}], tasa)
+    assert c["lineas"][0]["cantidad"] == Decimal("2.5") and c["subtotal"] == Decimal("45.00")
+    assert _stock(db, "AVE-001") == Decimal("4.475")
+    with pytest.raises(ErrorDeNegocio, match="Stock insuficiente"):
+        servicio.cotizar(db, [{"sku": "AVE-001", "cantidad": 4.476}], tasa)
+    servicio.crear_pedido(db, ANA, [{"sku": "AVE-001", "cantidad": 4.475}], tasa)
+    assert _stock(db, "AVE-001") == 0

@@ -24,7 +24,7 @@ def _ultimo_mensaje_usuario(state: dict) -> str:
 
 class Item(BaseModel):
     sku: str = Field(description="SKU del producto, p. ej. TEC-001")
-    cantidad: int = Field(description="Cantidad, entero mayor a 0")
+    cantidad: float = Field(description="Cantidad mayor a 0; decimales (hasta 3) solo si el producto se vende por peso, como KG")
 
 
 def construir_herramientas(db: Db, tasa: Decimal) -> list[BaseTool]:

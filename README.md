@@ -26,7 +26,7 @@ La suite de pruebas corre sobre SQLite con `TEST_BACKEND=sqlite uv run pytest` (
 
 ## Web UI y API REST
 
-    uv run ventas-web             # http://127.0.0.1:8000 (solo loopback, sin autenticación: demo local)
+    uv run ventas-web             # http://127.0.0.1:8000 (solo loopback; pide login, ver «Empresas y usuarios»; WEB_PORT cambia el puerto)
 
 Con Docker (app + Postgres, usa las claves de `.env`; dentro de la red de compose la BD es `db:5432`):
 
@@ -38,7 +38,21 @@ La app es un perfil aparte: `docker compose up -d --wait` sigue levantando solo 
 Vista de cliente por defecto; `/?dev` muestra además las herramientas llamadas y qué modelo respondió. En la web, igual que en el CLI, Bedrock responde primero; NIM y luego Gemini son el respaldo.
 
 `POST /api/chat` `{"mensaje", "thread_id"?}` responde por SSE (`herramienta`, `resultado`, `token`, `error`, `fin`);
-`GET /api/catalogo` · `GET /api/pedidos/{id}` · `GET /api/modelo` · docs interactivas en `/docs`.
+`GET /api/catalogo` · `GET /api/pedidos/{id}` · `GET /api/modelo` · `GET /api/yo` (todos requieren sesión) ·
+`POST /api/login` `{usuario, clave}` · `POST /api/logout` · `GET /api/salud` (público) · docs interactivas en `/docs`.
+
+## Empresas y usuarios
+
+Tres empresas, cada una con **su propia BD**: `agro` (la original, `DATABASE_URL`), `fevasa` (`fevasa.db`) y `pastech` (`pastech.db`).
+Un usuario pertenece a una sola empresa; la empresa sale de la sesión y el agente, `consulta_sql` y la API solo alcanzan esa BD.
+Los usuarios (contraseña con scrypt) viven aparte, en `auth.db` (`AUTH_DB`), nunca dentro de la BD de una empresa.
+
+    uv run scripts/importar_excel.py Data_Final_FEVASA.xlsx db/seed_fevasa.sql && uv run scripts/init_sqlite.py fevasa.db db/seed_fevasa.sql
+    uv run scripts/importar_excel.py Data_Final_Pastech.xlsx db/seed_pastech.sql && uv run scripts/init_sqlite.py pastech.db db/seed_pastech.sql
+    uv run scripts/crear_usuario.py fevasa fevasa        # USUARIO EMPRESA; pide la clave (la misma orden la cambia)
+    uv run ventas --empresa fevasa                      # CLI: sin login, elige la empresa por opción
+
+El importador toma Articulos, Existencias, Clientes y Ventas_Detalle. Un precio de lista de 1 es un marcador: se sustituye por el precio de venta más frecuente (> 1) y la salida lista cada cambio. Stock y cantidades admiten hasta 3 decimales (productos por kilo); una BD de Postgres ya creada necesita recrearse (`docker compose down -v`) para el cambio `NUMERIC(12,3)` de `db/schema.sql`.
 
 ## Comandos
 

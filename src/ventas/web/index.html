@@ -15,7 +15,7 @@
   * { box-sizing:border-box; }
   body { margin:0; height:100dvh; display:flex; align-items:center; justify-content:center;
          background:var(--bg); color:var(--fg); font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  .app { width:min(760px,100%); height:min(860px,100dvh); display:flex; flex-direction:column;
+  .app { position:relative; width:min(760px,100%); height:min(860px,100dvh); display:flex; flex-direction:column;
          background:var(--card); border-radius:18px; box-shadow:var(--shadow); overflow:hidden; }
   @media (max-width:760px) { .app { border-radius:0; height:100dvh; } }
 
@@ -27,7 +27,20 @@
   header .estado { display:inline-block; width:8px; height:8px; border-radius:50%; background:#4ade80; margin-right:5px; }
   header .espacio { flex:1; }
   #nuevo { background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:8px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer; }
-  #nuevo:hover { background:rgba(255,255,255,.3); }
+  #nuevo:hover, #salir:hover { background:rgba(255,255,255,.3); }
+  #salir { background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:8px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer; }
+
+  #acceso { position:absolute; inset:0; z-index:2; display:grid; place-items:center; padding:20px; background:var(--card); }
+  #acceso[hidden] { display:none; }
+  #acceso form { display:flex; flex-direction:column; align-items:stretch; gap:12px; width:min(340px,100%); padding:0; border:0; }
+  #acceso h2 { margin:0; font-size:20px; text-align:center; }
+  #acceso p { margin:0; color:var(--dim); font-size:13px; text-align:center; }
+  #acceso input { font:inherit; color:var(--fg); background:var(--bot); border:1px solid transparent; border-radius:12px; padding:11px 14px; outline:0; }
+  #acceso input:focus { border-color:var(--accent); }
+  #acceso button { border:0; border-radius:12px; padding:11px; font:inherit; font-weight:600; color:#fff; cursor:pointer;
+                   background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+  #acceso button:disabled { opacity:.45; cursor:default; }
+  #acceso .err { color:#b3261e; min-height:1.4em; }
 
   #log { flex:1; overflow-y:auto; padding:20px 18px; display:flex; flex-direction:column; gap:12px; scroll-behavior:smooth; }
   .fila { display:flex; gap:8px; align-items:flex-end; animation:entra .2s ease-out; }
@@ -71,10 +84,11 @@
     <div class="logo">🛒</div>
     <div>
       <h1>Asistente de ventas</h1>
-      <p><span class="estado"></span>En línea · Agroveterinaria</p>
+      <p><span class="estado"></span>En línea · <span id="empresa"></span></p>
     </div>
     <span class="espacio"></span>
     <button id="nuevo" type="button">Nueva conversación</button>
+    <button id="salir" type="button">Salir</button>
   </header>
   <div id="log" aria-live="polite"></div>
   <div id="sugerencias"></div>
@@ -83,13 +97,23 @@
     <button id="enviar" aria-label="Enviar">➤</button>
   </form>
   <div class="pie" id="pie"></div>
+  <div id="acceso" hidden>
+    <form id="formAcceso">
+      <h2>🛒 Asistente de ventas</h2>
+      <p>Inicia sesión para atender a tu empresa.</p>
+      <input id="usuario" autocomplete="username" placeholder="Usuario" required>
+      <input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña" required>
+      <div class="err" id="errAcceso" role="alert"></div>
+      <button id="entrar">Entrar</button>
+    </form>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
 const log = $("log"), txt = $("txt");
 const dev = new URLSearchParams(location.search).has("dev"); // ?dev muestra herramientas y proveedor
-const SUGERENCIAS = ["¿Qué agujas tienen?", "Quiero ver los shampoos", "Quiero hacer un pedido"];
-const BIENVENIDA = "¡Hola! 👋 Soy el asistente de la tienda. Puedo ayudarte a encontrar productos, armar tu pedido y completar el pago. ¿Qué estás buscando?";
+let perfil = null; // {usuario, empresa, sugerencias} de la sesión; null = sin sesión
+const bienvenida = () => `¡Hola! 👋 Soy el asistente de ${perfil.empresa}. Puedo ayudarte a encontrar productos, armar tu pedido y completar el pago. ¿Qué estás buscando?`;
 let threadId = null, ocupado = false, escribiendo = null;
 if (dev) $("pie").textContent = "Modo desarrollo: se muestran herramientas y proveedor";
 
@@ -168,6 +192,7 @@ async function enviar(mensaje) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensaje, thread_id: threadId }),
     });
+    if (resp.status === 401) { quitarIndicador(); mostrarAcceso("Tu sesión expiró. Vuelve a entrar."); return; }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     for await (const [ev, d] of eventos(resp)) {
       if (ev === "token") {
@@ -192,10 +217,19 @@ async function enviar(mensaje) {
   }
 }
 
+function mostrarAcceso(mensaje = "") {
+  perfil = null; threadId = null; log.replaceChildren(); $("sugerencias").replaceChildren();
+  $("empresa").textContent = ""; $("errAcceso").textContent = mensaje; $("clave").value = "";
+  $("acceso").hidden = false; $("usuario").focus();
+}
+function entrar(p) {
+  perfil = p; $("acceso").hidden = true; $("empresa").textContent = p.empresa; inicio();
+}
+
 function inicio() {
-  threadId = null; log.replaceChildren(); fila("bot", BIENVENIDA);
+  threadId = null; log.replaceChildren(); fila("bot", bienvenida());
   const s = $("sugerencias"); s.replaceChildren();
-  for (const t of SUGERENCIAS) {
+  for (const t of perfil.sugerencias) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = t;
     b.onclick = () => !ocupado && enviar(t); s.append(b);
   }
@@ -212,8 +246,20 @@ txt.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
 });
 txt.addEventListener("input", () => { txt.style.height = "auto"; txt.style.height = txt.scrollHeight + "px"; });
-$("nuevo").onclick = () => !ocupado && inicio();
-inicio();
+$("nuevo").onclick = () => !ocupado && perfil && inicio();
+$("salir").onclick = async () => { await fetch("/api/logout", { method: "POST" }); mostrarAcceso(); };
+$("formAcceso").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("entrar").disabled = true; $("errAcceso").textContent = "";
+  try {
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ usuario: $("usuario").value, clave: $("clave").value }) });
+    if (r.ok) entrar(await r.json());
+    else $("errAcceso").textContent = (await r.json().catch(() => ({}))).detail ?? `Error ${r.status}`;
+  } catch { $("errAcceso").textContent = "No pude conectarme con el servidor."; }
+  finally { $("entrar").disabled = false; }
+});
+fetch("/api/yo").then(async (r) => (r.ok ? entrar(await r.json()) : mostrarAcceso()))
+  .catch(() => mostrarAcceso("No pude conectarme con el servidor."));
 </script>
 </body>
 </html>

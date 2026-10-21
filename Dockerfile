@@ -16,5 +16,5 @@ USER app
 WORKDIR /home/app
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
-  CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/modelo', timeout=2)"]
+  CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/salud', timeout=2)"]
 CMD ["ventas-web"]

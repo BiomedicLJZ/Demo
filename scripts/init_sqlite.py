@@ -1,6 +1,6 @@
-"""Crea la BD SQLite de demo (esquema + catálogo de db/seed.sql): sin Docker ni PostgreSQL.
+"""Crea una BD SQLite (esquema + catálogo de un seed SQL): sin Docker ni PostgreSQL.
 
-Uso: uv run scripts/init_sqlite.py [demo.db]    y en .env: DATABASE_URL=sqlite:///demo.db
+Uso: uv run scripts/init_sqlite.py [demo.db] [seed.sql]    y en .env: DATABASE_URL=sqlite:///demo.db
 """
 import sqlite3
 import sys
@@ -12,7 +12,8 @@ if ruta.exists():
     sys.exit(f"{ruta} ya existe; bórrala si quieres recrearla.")
 
 # seed.sql abre con TRUNCATE/ALTER SEQUENCE (solo Postgres); el resto son INSERT estándar
-seed = "\n".join(l for l in (DB / "seed.sql").read_text().splitlines() if not l.startswith(("TRUNCATE", "ALTER SEQUENCE")))
+semilla = Path(sys.argv[2]) if len(sys.argv) > 2 else DB / "seed.sql"
+seed = "\n".join(l for l in semilla.read_text().splitlines() if not l.startswith(("TRUNCATE", "ALTER SEQUENCE")))
 con = sqlite3.connect(ruta)
 con.executescript((DB / "schema_sqlite.sql").read_text() + seed)
 n = con.execute("SELECT count(*) FROM productos").fetchone()[0]

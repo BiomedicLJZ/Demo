@@ -24,7 +24,7 @@ CREATE TABLE productos (
   sku    TEXT NOT NULL UNIQUE,
   nombre TEXT NOT NULL,
   precio NUMERIC(12,2) NOT NULL CHECK (precio >= 0),
-  stock  INTEGER NOT NULL CHECK (stock >= 0),
+  stock  NUMERIC(12,3) NOT NULL CHECK (stock >= 0),  -- hasta 3 decimales: hay productos que se venden por kg
   activo BOOLEAN NOT NULL DEFAULT TRUE,
   impuesto NUMERIC(5,4) CHECK (impuesto >= 0 AND impuesto < 1)  -- fracción (0.16); NULL = tasa global TASA_IMPUESTO
 );
@@ -42,7 +42,7 @@ CREATE TABLE pedidos (
 CREATE TABLE pedido_items (
   pedido_id       BIGINT NOT NULL REFERENCES pedidos(id),
   producto_id     BIGINT NOT NULL REFERENCES productos(id),
-  cantidad        INTEGER NOT NULL CHECK (cantidad > 0),
+  cantidad        NUMERIC(12,3) NOT NULL CHECK (cantidad > 0),
   precio_unitario NUMERIC(12,2) NOT NULL,
   PRIMARY KEY (pedido_id, producto_id)
 );
